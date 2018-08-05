@@ -4,8 +4,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,13 +20,11 @@ import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.pdf.canvas.parser.EventType;
-import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
+import com.itextpdf.kernel.pdf.canvas.parser.PdfCanvasProcessor;
 import com.itextpdf.kernel.pdf.canvas.parser.data.IEventData;
 import com.itextpdf.kernel.pdf.canvas.parser.data.TextRenderInfo;
 import com.itextpdf.kernel.pdf.canvas.parser.filter.IEventFilter;
-import com.itextpdf.kernel.pdf.canvas.parser.listener.FilteredTextEventListener;
-import com.itextpdf.kernel.pdf.canvas.parser.listener.ITextExtractionStrategy;
-import com.itextpdf.kernel.pdf.canvas.parser.listener.LocationTextExtractionStrategy;
+import com.itextpdf.kernel.pdf.canvas.parser.listener.IEventListener;
 
 public class Main {
 
@@ -53,13 +53,10 @@ public class Main {
 //		        LOGGER.info("Found text for page {} -> '{}'", i, currentText);
 
 				final GatherBaselines gatherBaselines = new GatherBaselines();
-				final ITextExtractionStrategy strategy = new FilteredTextEventListener(
-						new LocationTextExtractionStrategy(), gatherBaselines);
+				final PdfCanvasProcessor processor = new PdfCanvasProcessor(gatherBaselines);
+				processor.processPageContent(page);
 
-				// need to walk the file, using a text extractor seems to work
-				// TODO: might be a better way to do this
-				PdfTextExtractor.getTextFromPage(page, strategy);
-				// LOGGER.info("new text '{}'", newText);
+				LOGGER.info("Filter baselines for page {} -> {}", i, gatherBaselines.baselinesToFilter);
 
 				destDoc.setDefaultPageSize(new PageSize(pageSize));
 				destDoc.addNewPage();
@@ -91,41 +88,31 @@ public class Main {
 		}
 	}
 
-	public class GatherBaselines implements IEventFilter {
+	public class GatherBaselines implements IEventListener {
 
 		// need to store all baselines that are problems
 		// the assumption is that all RENDER_TEXT operations with a baseline in the bad
 		// list need to be filtered when copying pages
-		private float filterY = Float.NaN;
 		private final List<Float> baselinesToFilter = new LinkedList<>();
 
 		@Override
-		public boolean accept(final IEventData data, final EventType type) {
+		public void eventOccurred(final IEventData data, final EventType type) {
 			if (type.equals(EventType.RENDER_TEXT)) {
 				final TextRenderInfo renderInfo = (TextRenderInfo) data;
 
 				final String text = renderInfo.getText();
 				final LineSegment baseline = renderInfo.getBaseline();
-				if (Float.isFinite(filterY)) {
-					if (Math.abs(filterY - baseline.getStartPoint().get(1)) < 1E-6) {
-						LOGGER.info("Filtering '{}'", text);
-						return false;
-					} else {
-						// new line
-						filterY = Float.NaN;
-					}
-				}
-
 				if (null != text && (text.contains("Calendar:") || text.contains("Created by:"))) {
-					LOGGER.info("Filtering '{}'", text);
-					filterY = baseline.getStartPoint().get(1);
 					// index 1 is the y coordinate
 					baselinesToFilter.add(baseline.getStartPoint().get(1));
-					return false;
 				}
 			}
 
-			return true;
+		}
+		
+		@Override
+		public Set<EventType> getSupportedEvents() {
+			return Collections.singleton(EventType.RENDER_TEXT);
 		}
 
 	}

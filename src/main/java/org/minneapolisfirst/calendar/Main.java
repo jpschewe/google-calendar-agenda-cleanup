@@ -4,6 +4,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -11,14 +13,9 @@ import org.apache.logging.log4j.Logger;
 import com.itextpdf.kernel.geom.LineSegment;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.geom.Rectangle;
-import com.itextpdf.kernel.geom.Vector;
-import com.itextpdf.kernel.pdf.PdfDictionary;
 import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfName;
-import com.itextpdf.kernel.pdf.PdfObject;
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfReader;
-import com.itextpdf.kernel.pdf.PdfStream;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.pdf.canvas.parser.EventType;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
@@ -28,7 +25,6 @@ import com.itextpdf.kernel.pdf.canvas.parser.filter.IEventFilter;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.FilteredTextEventListener;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.ITextExtractionStrategy;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.LocationTextExtractionStrategy;
-import com.itextpdf.kernel.pdf.canvas.parser.listener.SimpleTextExtractionStrategy;
 
 public class Main {
 
@@ -56,25 +52,14 @@ public class Main {
 //		        final String currentText = PdfTextExtractor.getTextFromPage(page, strategy);
 //		        LOGGER.info("Found text for page {} -> '{}'", i, currentText);
 
+				final GatherBaselines gatherBaselines = new GatherBaselines();
 				final ITextExtractionStrategy strategy = new FilteredTextEventListener(
-						new LocationTextExtractionStrategy(), new TextFilter());
+						new LocationTextExtractionStrategy(), gatherBaselines);
 
-				final String newText = PdfTextExtractor.getTextFromPage(page, strategy);
-				LOGGER.info("new text '{}'", newText);
-
-//				PdfDictionary dict = page.getPdfObject();
-//				PdfObject object = dict.get(PdfName.Contents);
-
-//				if (object instanceof PdfStream) {
-//					PdfStream stream = (PdfStream) object;
-//					byte[] data = stream.getBytes();
-//					final String str = new String(data);
-//					LOGGER.info("Saw text '{}'", str);
-//					// stream.setData(new String(data).replace("Hello World", "HELLO
-//					// WORLD").getBytes("UTF-8"));
-//				} else {
-//					LOGGER.info("Found object of type {}", object.getClass());
-//				}
+				// need to walk the file, using a text extractor seems to work
+				// TODO: might be a better way to do this
+				PdfTextExtractor.getTextFromPage(page, strategy);
+				// LOGGER.info("new text '{}'", newText);
 
 				destDoc.setDefaultPageSize(new PageSize(pageSize));
 				destDoc.addNewPage();
@@ -83,9 +68,36 @@ public class Main {
 		}
 	}
 
-	public class TextFilter implements IEventFilter {
+	public class FilterEventsByBaseline implements IEventFilter {
+		private final List<Float> baselinesToFilter;
 
+		public FilterEventsByBaseline(final List<Float> baselinesToFilter) {
+			this.baselinesToFilter = baselinesToFilter;
+		}
+
+		@Override
+		public boolean accept(final IEventData data, final EventType type) {
+			if (type.equals(EventType.RENDER_TEXT)) {
+				final TextRenderInfo renderInfo = (TextRenderInfo) data;
+				final LineSegment baseline = renderInfo.getBaseline();
+				final float checkY = baseline.getStartPoint().get(1);
+
+				final boolean filter = baselinesToFilter.stream().anyMatch(f -> Math.abs(checkY - f) < 1E-6);
+				return !filter;
+			}
+
+			return true;
+
+		}
+	}
+
+	public class GatherBaselines implements IEventFilter {
+
+		// need to store all baselines that are problems
+		// the assumption is that all RENDER_TEXT operations with a baseline in the bad
+		// list need to be filtered when copying pages
 		private float filterY = Float.NaN;
+		private final List<Float> baselinesToFilter = new LinkedList<>();
 
 		@Override
 		public boolean accept(final IEventData data, final EventType type) {
@@ -107,6 +119,8 @@ public class Main {
 				if (null != text && (text.contains("Calendar:") || text.contains("Created by:"))) {
 					LOGGER.info("Filtering '{}'", text);
 					filterY = baseline.getStartPoint().get(1);
+					// index 1 is the y coordinate
+					baselinesToFilter.add(baseline.getStartPoint().get(1));
 					return false;
 				}
 			}

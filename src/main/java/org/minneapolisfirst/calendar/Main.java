@@ -31,7 +31,6 @@ public class Main {
 	private static final Logger LOGGER = LogManager.getLogger();
 
 	public static void main(String[] args) throws FileNotFoundException, IOException {
-		// TODO Auto-generated method stub
 		final Path src = Paths.get("/home/jpschewe/Downloads/calendar_2018-08-04_2018-08-19.pdf");
 		final Path dest = Paths.get("/home/jpschewe/Downloads/calendar_clean.pdf");
 
@@ -46,11 +45,7 @@ public class Main {
 			final Rectangle pageSize = srcDoc.getFirstPage().getPageSize();
 
 			for (int i = 1; i <= srcDoc.getNumberOfPages(); ++i) {
-				PdfPage page = srcDoc.getPage(i);
-
-//				final ITextExtractionStrategy strategy = new SimpleTextExtractionStrategy();
-//		        final String currentText = PdfTextExtractor.getTextFromPage(page, strategy);
-//		        LOGGER.info("Found text for page {} -> '{}'", i, currentText);
+				final PdfPage page = srcDoc.getPage(i);
 
 				final GatherBaselines gatherBaselines = new GatherBaselines();
 				final PdfCanvasProcessor processor = new PdfCanvasProcessor(gatherBaselines);

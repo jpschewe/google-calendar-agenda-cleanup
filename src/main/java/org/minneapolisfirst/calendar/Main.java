@@ -1,5 +1,6 @@
 package org.minneapolisfirst.calendar;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -8,7 +9,12 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.prefs.Preferences;
 
+import javax.swing.JFileChooser;
+import javax.swing.filechooser.FileNameExtensionFilter;
+
+import org.apache.commons.io.FilenameUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -32,12 +38,72 @@ public class Main {
 	private static final Logger LOGGER = LogManager.getLogger();
 
 	public static void main(String[] args) throws FileNotFoundException, IOException {
-		final Path src = Paths.get("/home/jpschewe/Downloads/calendar_2018-08-04_2018-08-19.pdf");
-		final Path dest = Paths.get("/home/jpschewe/Downloads/calendar_clean.pdf");
+		final JFileChooser chooser = new JFileChooser();
+		chooser.setCurrentDirectory(getInitialDirectory());
+		chooser.setFileFilter(new FileNameExtensionFilter("PDF Files", "pdf"));
+		chooser.setDialogTitle("Choose PDF calendar to clean up");
 
-		new Main(src, dest);
+		final int result = chooser.showOpenDialog(null);
+		if (JFileChooser.APPROVE_OPTION == result) {
+			final File selected = chooser.getSelectedFile();
+			setInitialDirectory(selected);
 
+			final Path src = Paths.get(selected.toURI());
+
+			final String basename = FilenameUtils.getBaseName(src.toString());
+			final String cleanName = String.format("%s.clean.pdf", basename);
+
+			final Path dest = src.getParent().resolve(cleanName);
+
+			new Main(src, dest);
+		}
+		System.exit(0);
 	}
+
+	/**
+	 * Set the initial directory preference. This supports opening new file dialogs
+	 * to a (hopefully) better default in the user's next session.
+	 * 
+	 * @param dir the File for the directory in which file dialogs should open
+	 */
+	private static void setInitialDirectory(final File dir) {
+		// Store only directories
+		final File directory;
+		if (dir.isDirectory()) {
+			directory = dir;
+		} else {
+			directory = dir.getParentFile();
+		}
+
+		final Preferences preferences = Preferences.userNodeForPackage(Main.class);
+		final String previousPath = preferences.get(INITIAL_DIRECTORY_PREFERENCE_KEY, null);
+
+		if (!directory.toString().equals(previousPath)) {
+			preferences.put(INITIAL_DIRECTORY_PREFERENCE_KEY, directory.toString());
+		}
+	}
+
+	/**
+	 * Get the initial directory to which file dialogs should open. This supports
+	 * opening to a better directory across sessions.
+	 * 
+	 * @return the File for the initial directory
+	 */
+	private static File getInitialDirectory() {
+		final Preferences preferences = Preferences.userNodeForPackage(Main.class);
+		final String path = preferences.get(INITIAL_DIRECTORY_PREFERENCE_KEY, null);
+
+		File dir = null;
+		if (null != path) {
+			dir = new File(path);
+		}
+		return dir;
+	}
+
+	/**
+	 * Preferences key for file dialog initial directory
+	 */
+	private static final String INITIAL_DIRECTORY_PREFERENCE_KEY = "InitialDirectory";
 
 	private Main(final Path src, final Path dest) throws FileNotFoundException, IOException {
 

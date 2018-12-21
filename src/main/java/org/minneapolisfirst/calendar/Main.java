@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -38,24 +39,39 @@ public class Main {
   private static final Logger LOGGER = LogManager.getLogger();
 
   public static void main(String[] args) throws FileNotFoundException, IOException {
-    final JFileChooser chooser = new JFileChooser();
-    chooser.setCurrentDirectory(getInitialDirectory());
-    chooser.setFileFilter(new FileNameExtensionFilter("PDF Files", "pdf"));
-    chooser.setDialogTitle("Choose PDF calendar to clean up");
+    if(args.length > 0) {
+      final Path src = Paths.get(args[0]);
+      if(!Files.exists(src)) {
+        LOGGER.fatal("{} does not exist", src);
+        System.exit(1);
+      } else {
+        final String basename = FilenameUtils.getBaseName(src.toString());
+        final String cleanName = String.format("%s.clean.pdf", basename);
 
-    final int result = chooser.showOpenDialog(null);
-    if (JFileChooser.APPROVE_OPTION == result) {
-      final File selected = chooser.getSelectedFile();
-      setInitialDirectory(selected);
+        final Path dest = src.getParent().resolve(cleanName);
 
-      final Path src = Paths.get(selected.toURI());
+        new Main(src, dest);
+      }
+    } else {
+      final JFileChooser chooser = new JFileChooser();
+      chooser.setCurrentDirectory(getInitialDirectory());
+      chooser.setFileFilter(new FileNameExtensionFilter("PDF Files", "pdf"));
+      chooser.setDialogTitle("Choose PDF calendar to clean up");
 
-      final String basename = FilenameUtils.getBaseName(src.toString());
-      final String cleanName = String.format("%s.clean.pdf", basename);
+      final int result = chooser.showOpenDialog(null);
+      if (JFileChooser.APPROVE_OPTION == result) {
+        final File selected = chooser.getSelectedFile();
+        setInitialDirectory(selected);
 
-      final Path dest = src.getParent().resolve(cleanName);
+        final Path src = Paths.get(selected.toURI());
 
-      new Main(src, dest);
+        final String basename = FilenameUtils.getBaseName(src.toString());
+        final String cleanName = String.format("%s.clean.pdf", basename);
+
+        final Path dest = src.getParent().resolve(cleanName);
+
+        new Main(src, dest);
+      }
     }
     System.exit(0);
   }

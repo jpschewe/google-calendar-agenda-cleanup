@@ -27,3 +27,9 @@ dependencies {
 shadowJar {
    classifier = 'executable'
 }
+
+jar {
+  manifest.attributes(
+     'Multi-Release': 'true'
+  )
+}
